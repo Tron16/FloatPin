@@ -1,0 +1,103 @@
+import AppKit
+import ApplicationServices
+import CoreGraphics
+
+/// A window owned by some other app. `bounds` uses CoreGraphics coordinates
+/// (origin at top-left of the main display, y grows downward).
+struct WinInfo {
+    let id: CGWindowID
+    let pid: pid_t
+    let bounds: CGRect
+    let owner: String
+    let title: String
+
+    var displayName: String { title.isEmpty ? owner : "\(owner) · \(title)" }
+}
+
+enum WindowList {
+    /// Normal app windows currently on screen, front to back.
+    static func onScreen() -> [WinInfo] {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
+                                                    kCGNullWindowID) as? [[String: Any]] else { return [] }
+        let me = ProcessInfo.processInfo.processIdentifier
+        return list.compactMap { info in
+            guard let w = parse(info),
+                  w.pid != me,
+                  (info[kCGWindowLayer as String] as? Int) == 0,
+                  ((info[kCGWindowAlpha as String] as? Double) ?? 1) > 0,
+                  w.bounds.width >= 80, w.bounds.height >= 60 else { return nil }
+            return w
+        }
+    }
+
+    /// Topmost window under a point (CG coordinates).
+    static func window(at point: CGPoint) -> WinInfo? {
+        onScreen().first { $0.bounds.contains(point) }
+    }
+
+    /// Frontmost window of the frontmost app.
+    static func frontmostWindow() -> WinInfo? {
+        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return nil }
+        return onScreen().first { $0.pid == pid }
+    }
+
+    /// Current bounds of a window, or nil if it no longer exists.
+    static func bounds(of id: CGWindowID) -> CGRect? {
+        guard let list = CGWindowListCopyWindowInfo(.optionIncludingWindow, id) as? [[String: Any]],
+              let info = list.first, let w = parse(info), w.id == id else { return nil }
+        return w.bounds
+    }
+
+    private static func parse(_ info: [String: Any]) -> WinInfo? {
+        guard let id = info[kCGWindowNumber as String] as? Int,
+              let pid = info[kCGWindowOwnerPID as String] as? Int,
+              let dict = info[kCGWindowBounds as String] as? NSDictionary,
+              let rect = CGRect(dictionaryRepresentation: dict as CFDictionary) else { return nil }
+        return WinInfo(id: CGWindowID(id),
+                       pid: pid_t(pid),
+                       bounds: rect,
+                       owner: info[kCGWindowOwnerName as String] as? String ?? "Unknown",
+                       title: info[kCGWindowName as String] as? String ?? "")
+    }
+}
+
+enum Geometry {
+    static var primaryHeight: CGFloat { NSScreen.screens.first?.frame.height ?? 0 }
+
+    /// CG (top-left origin) rect -> Cocoa (bottom-left origin) rect.
+    static func toCocoa(_ r: CGRect) -> NSRect {
+        NSRect(x: r.minX, y: primaryHeight - r.maxY, width: r.width, height: r.height)
+    }
+}
+
+/// Accessibility helpers for bringing the real window forward.
+enum AXHelper {
+    static func raise(pid: pid_t, matching bounds: CGRect) {
+        let app = AXUIElementCreateApplication(pid)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
+              let windows = value as? [AXUIElement] else { return }
+        for w in windows {
+            guard let f = frame(of: w) else { continue }
+            if abs(f.minX - bounds.minX) < 4, abs(f.minY - bounds.minY) < 4,
+               abs(f.width - bounds.width) < 4, abs(f.height - bounds.height) < 4 {
+                AXUIElementSetAttributeValue(w, kAXMainAttribute as CFString, kCFBooleanTrue)
+                AXUIElementPerformAction(w, kAXRaiseAction as CFString)
+                return
+            }
+        }
+    }
+
+    private static func frame(of w: AXUIElement) -> CGRect? {
+        var posRef: CFTypeRef?
+        var sizeRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(w, kAXPositionAttribute as CFString, &posRef) == .success,
+              AXUIElementCopyAttributeValue(w, kAXSizeAttribute as CFString, &sizeRef) == .success,
+              let posRef, let sizeRef else { return nil }
+        var pos = CGPoint.zero
+        var size = CGSize.zero
+        AXValueGetValue(posRef as! AXValue, .cgPoint, &pos)
+        AXValueGetValue(sizeRef as! AXValue, .cgSize, &size)
+        return CGRect(origin: pos, size: size)
+    }
+}
