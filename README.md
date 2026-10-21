@@ -18,7 +18,7 @@ A tiny, free, open-source menu bar app for macOS. No account, no telemetry, no s
 
 <br>
 
-<img src="docs/assets/hero.png" width="860" alt="Illustration: a lecture video pinned above a code editor and a docs window">
+<img src="docs/assets/demo.gif" width="860" alt="Animation: shaking a lecture window pins it, it stays on top while you work in a code editor, and you can drag it anywhere">
 
 </div>
 
