@@ -2,6 +2,7 @@
 # Builds FloatPin.app with just the Xcode command line tools (no Xcode project needed).
 #   ./build.sh            build into ./build/FloatPin.app
 #   ./build.sh install    build, copy to /Applications, and launch
+#   ./build.sh dmg        build and package FloatPin.dmg (drag-to-Applications installer)
 #
 # Tip: set SIGN_IDENTITY to your "Apple Development: ..." certificate name so macOS
 # keeps your permissions between rebuilds. Without it the app is ad-hoc signed and
@@ -29,6 +30,17 @@ echo "Signing ($IDENTITY)..."
 codesign --force --sign "$IDENTITY" "$APP"
 
 echo "Built $APP"
+
+if [[ "${1:-}" == "dmg" ]]; then
+  echo "Making FloatPin.dmg..."
+  STAGE="build/dmg"
+  mkdir -p "$STAGE"
+  cp -R "$APP" "$STAGE/"
+  ln -s /Applications "$STAGE/Applications"   # drag-to-install shortcut
+  rm -f FloatPin.dmg
+  hdiutil create -volname "FloatPin" -srcfolder "$STAGE" -ov -format UDZO FloatPin.dmg
+  echo "Made $(pwd)/FloatPin.dmg"
+fi
 
 if [[ "${1:-}" == "install" ]]; then
   pkill -x FloatPin 2>/dev/null || true
