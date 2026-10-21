@@ -1,6 +1,6 @@
 # FloatPin
 
-A menu bar app that keeps any window floating on top. Grab a window, shake it for a second or two, and a live copy pins itself to the corner of your screen.
+A menu bar app that keeps any window floating on top. Grab a window, shake it for a second or two, and it pins right where it is, same size, floating over everything.
 
 ## Build and run
 
@@ -16,22 +16,23 @@ The first launch opens a setup window asking for **Accessibility** and **Screen 
 
 ## Using it
 
-- **Pin:** drag a window by its title bar and shake it back and forth.
-- **Unpin:** shake the pinned copy the same way, click its close button, or use the menu bar.
-- **Double-click a pin:** jumps to the real window. The pin hides while that app is in front and comes back when you switch away.
-- **⌃⌥P:** pins the front window.
-- **Menu bar → Pin a Window:** pick any open window from a list.
-- **Settings:** shake sensitivity, pin size, opacity, click-through, border, frame rate, launch at login.
+- **Pin:** drag a window by its title bar and shake it back and forth. The pin appears exactly over the original.
+- **Move / resize the pin:** drag it anywhere, or drag its edges to resize (it keeps the window's shape).
+- **Click the pin:** the real window jumps to exactly where the pin is, at the same size, and comes forward so you can use it. The pin steps aside.
+- **Switch to another app:** the pin floats again, right where the real window is.
+- **Unpin:** shake the pin the same way, or use the menu bar.
+- **⌃⌥P:** pins the front window. **Menu bar → Pin a Window** lists every open window.
+- **Settings:** shake sensitivity, opacity, click-through, border, frame rate, launch at login.
 
 ## How it works
 
-macOS won't let one app float another app's window, so FloatPin streams the window with ScreenCaptureKit into its own floating `NSPanel`. That means a pin is a live view, not the real window: you can watch it but you can't type into it.
+macOS won't let one app float another app's window, so FloatPin streams the window with ScreenCaptureKit into its own floating `NSPanel`. A pin is a live view, so to type into it you click it: the real window is moved (via Accessibility) to the pin's exact spot and size and brought forward, so it feels like the same window.
 
 | File | What it does |
 |---|---|
 | `Shake.swift` | Global mouse monitor + shake detection (counts direction reversals) |
-| `PinnedWindow.swift` | The floating panel, the ScreenCaptureKit stream, `PinManager` |
-| `WindowList.swift` | Finds windows with `CGWindowListCopyWindowInfo`, raises them with Accessibility |
+| `PinnedWindow.swift` | The floating panel (drag, resize, click hand-off), the ScreenCaptureKit stream, `PinManager` |
+| `WindowList.swift` | Finds windows with `CGWindowListCopyWindowInfo`, moves/raises them with Accessibility |
 | `Permissions.swift` | Permission checks, prompts, deep links into System Settings |
 | `Views.swift` | SwiftUI setup and settings screens |
 | `HotKey.swift` | Global ⌃⌥P shortcut |

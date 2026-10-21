@@ -70,22 +70,36 @@ enum Geometry {
     }
 }
 
-/// Accessibility helpers for bringing the real window forward.
+/// Accessibility helpers for moving the real window and bringing it forward.
+/// AX uses the same top-left-origin coordinates as CoreGraphics.
 enum AXHelper {
-    static func raise(pid: pid_t, matching bounds: CGRect) {
+    /// Finds the AX window of `pid` whose frame matches `bounds`.
+    static func window(pid: pid_t, matching bounds: CGRect) -> AXUIElement? {
         let app = AXUIElementCreateApplication(pid)
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
-              let windows = value as? [AXUIElement] else { return }
-        for w in windows {
-            guard let f = frame(of: w) else { continue }
-            if abs(f.minX - bounds.minX) < 4, abs(f.minY - bounds.minY) < 4,
-               abs(f.width - bounds.width) < 4, abs(f.height - bounds.height) < 4 {
-                AXUIElementSetAttributeValue(w, kAXMainAttribute as CFString, kCFBooleanTrue)
-                AXUIElementPerformAction(w, kAXRaiseAction as CFString)
-                return
-            }
+              let windows = value as? [AXUIElement] else { return nil }
+        return windows.first { w in
+            guard let f = frame(of: w) else { return false }
+            return abs(f.minX - bounds.minX) < 4 && abs(f.minY - bounds.minY) < 4
+                && abs(f.width - bounds.width) < 4 && abs(f.height - bounds.height) < 4
         }
+    }
+
+    static func setFrame(_ w: AXUIElement, to r: CGRect) {
+        var origin = r.origin
+        var size = r.size
+        guard let pos = AXValueCreate(.cgPoint, &origin),
+              let sz = AXValueCreate(.cgSize, &size) else { return }
+        // Position, size, position again: some apps clamp size based on where the window is.
+        AXUIElementSetAttributeValue(w, kAXPositionAttribute as CFString, pos)
+        AXUIElementSetAttributeValue(w, kAXSizeAttribute as CFString, sz)
+        AXUIElementSetAttributeValue(w, kAXPositionAttribute as CFString, pos)
+    }
+
+    static func raise(_ w: AXUIElement) {
+        AXUIElementSetAttributeValue(w, kAXMainAttribute as CFString, kCFBooleanTrue)
+        AXUIElementPerformAction(w, kAXRaiseAction as CFString)
     }
 
     private static func frame(of w: AXUIElement) -> CGRect? {

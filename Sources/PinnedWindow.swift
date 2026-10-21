@@ -26,63 +26,151 @@ final class StreamReceiver: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 }
 
-/// The view inside the floating panel: shows the live frames, handles
-/// dragging (so we can detect a shake to unpin) and double-click.
+/// The view that fills the floating panel. It draws the live frames and
+/// handles everything a real window would: drag to move, drag the edges to
+/// resize, and click to "become" the real window.
 final class MirrorView: NSView {
-    var onDoubleClick: (() -> Void)?
+    var onClick: (() -> Void)?
     var onDragBegan: (() -> Void)?
     var onDrag: ((NSPoint) -> Void)?
 
-    private var dragStartMouse: NSPoint?
-    private var dragStartOrigin: NSPoint?
+    /// Width:height of the source window, kept while resizing.
+    var aspect = CGSize(width: 16, height: 10)
 
-    var showBorder = true {
-        didSet {
-            layer?.borderWidth = showBorder ? 2 : 0
-        }
+    private struct Edges {
+        var left = false, right = false, top = false, bottom = false
+        var any: Bool { left || right || top || bottom }
+    }
+    private enum Mode { case idle, move, resize(Edges) }
+
+    private var mode = Mode.idle
+    private var startMouse = NSPoint.zero
+    private var startFrame = NSRect.zero
+    private var moved = false
+    private let grip: CGFloat = 8
+    private var hadFirstFrame = false
+
+    var showBorder = false {
+        didSet { layer?.borderWidth = showBorder ? 2 : 0 }
     }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         let l = CALayer()
         l.contentsGravity = .resizeAspect
-        l.backgroundColor = NSColor.black.cgColor
-        l.cornerRadius = 10
-        l.masksToBounds = true
+        l.backgroundColor = NSColor.clear.cgColor   // the window's own rounded corners show through
+        l.cornerRadius = 12
         l.borderColor = NSColor.controlAccentColor.cgColor
-        l.borderWidth = 2
+        l.borderWidth = 0
         layer = l          // layer-hosting: we own the layer's contents
         wantsLayer = true
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    func show(_ surface: IOSurface) { layer?.contents = surface }
+    func show(_ surface: IOSurface) {
+        layer?.contents = surface
+        if !hadFirstFrame {
+            hadFirstFrame = true
+            window?.invalidateShadow()   // shadow follows the window's real shape
+        }
+    }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    // MARK: Cursor feedback on the edges
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: .zero,
+                                       options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                       owner: self, userInfo: nil))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let e = edges(at: convert(event.locationInWindow, from: nil))
+        if (e.left || e.right) && !(e.top || e.bottom) { NSCursor.resizeLeftRight.set() }
+        else if (e.top || e.bottom) && !(e.left || e.right) { NSCursor.resizeUpDown.set() }
+        else if e.any { NSCursor.crosshair.set() }
+        else { NSCursor.arrow.set() }
+    }
+
+    override func mouseExited(with event: NSEvent) { NSCursor.arrow.set() }
+
+    private func edges(at p: NSPoint) -> Edges {
+        Edges(left: p.x < grip, right: p.x > bounds.width - grip,
+              top: p.y > bounds.height - grip, bottom: p.y < grip)
+    }
+
+    // MARK: Mouse
+
     override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2 { onDoubleClick?(); return }
-        dragStartMouse = NSEvent.mouseLocation
-        dragStartOrigin = window?.frame.origin
-        onDragBegan?()
+        guard let window else { return }
+        startMouse = NSEvent.mouseLocation
+        startFrame = window.frame
+        moved = false
+        let e = edges(at: convert(event.locationInWindow, from: nil))
+        mode = e.any ? .resize(e) : .move
+        if case .move = mode { onDragBegan?() }
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let start = dragStartMouse, let origin = dragStartOrigin, let window else { return }
+        guard let window else { return }
         let p = NSEvent.mouseLocation
-        window.setFrameOrigin(NSPoint(x: origin.x + p.x - start.x, y: origin.y + p.y - start.y))
-        onDrag?(p)
+        let dx = p.x - startMouse.x
+        let dy = p.y - startMouse.y
+        if hypot(dx, dy) > 3 { moved = true }
+
+        switch mode {
+        case .idle:
+            return
+        case .move:
+            window.setFrameOrigin(NSPoint(x: startFrame.minX + dx, y: startFrame.minY + dy))
+            onDrag?(p)
+        case .resize(let e):
+            window.setFrame(resized(startFrame, edges: e, dx: dx, dy: dy), display: true)
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
-        dragStartMouse = nil
-        dragStartOrigin = nil
+        if case .move = mode, !moved { onClick?() }
+        mode = .idle
+    }
+
+    /// New frame for an edge/corner drag, keeping the aspect ratio and
+    /// pinning the opposite edge in place.
+    private func resized(_ f: NSRect, edges e: Edges, dx: CGFloat, dy: CGFloat) -> NSRect {
+        let ratio = aspect.height > 0 ? aspect.width / aspect.height : 1.6
+        var w = f.width
+        var h = f.height
+        if e.right { w = f.width + dx }
+        if e.left { w = f.width - dx }
+        if e.top { h = f.height + dy }
+        if e.bottom { h = f.height - dy }
+
+        let horizontal = e.left || e.right
+        let vertical = e.top || e.bottom
+        if horizontal && !vertical { h = w / ratio }
+        else if vertical && !horizontal { w = h * ratio }
+        else if abs(w - f.width) >= abs(h - f.height) * ratio { h = w / ratio }
+        else { w = h * ratio }
+
+        w = max(160, w)
+        h = w / ratio
+
+        var x = f.minX
+        var y = f.minY
+        if e.left { x = f.maxX - w }
+        if e.bottom || !vertical { y = f.maxY - h }   // side drags keep the top edge fixed
+        return NSRect(x: x, y: y, width: w, height: h)
     }
 }
 
-/// One pinned window: a floating panel showing a live copy of another app's window.
-final class PinnedWindow: NSObject, NSWindowDelegate {
+/// One pinned window: a floating panel showing a live copy of another app's
+/// window, sitting exactly where the original is. Click it and the real
+/// window moves to the pin's spot and size and comes forward.
+final class PinnedWindow: NSObject {
     let source: WinInfo
     var onClose: (() -> Void)?
 
@@ -99,48 +187,36 @@ final class PinnedWindow: NSObject, NSWindowDelegate {
     private var timer: Timer?
     private var activationObserver: Any?
     private var closing = false
+    /// True while we're tucked away because you're using the real window.
+    private var handedOff = false
 
     var title: String { source.displayName }
 
-    init(source: WinInfo, index: Int) {
+    init(source: WinInfo) {
         self.source = source
         self.lastSize = source.bounds.size
 
-        // Size: a fraction of the original, but never tiny.
-        let scale = max(CGFloat(Prefs.pinScale), 200 / max(source.bounds.width, 1))
-        let size = NSSize(width: source.bounds.width * scale, height: source.bounds.height * scale)
-
-        // Place in the top-right corner of the screen the window is on, cascading.
-        let cocoa = Geometry.toCocoa(source.bounds)
-        let center = NSPoint(x: cocoa.midX, y: cocoa.midY)
-        let screen = NSScreen.screens.first { $0.frame.contains(center) } ?? NSScreen.main ?? NSScreen.screens[0]
-        let vf = screen.visibleFrame
-        let offset = CGFloat(index % 6) * 32
-        let origin = NSPoint(x: vf.maxX - size.width - 20 - offset,
-                             y: vf.maxY - size.height - 20 - offset)
-
-        panel = NSPanel(contentRect: NSRect(origin: origin, size: size),
-                        styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .fullSizeContentView],
+        // Same size, same spot as the original.
+        panel = NSPanel(contentRect: Geometry.toCocoa(source.bounds),
+                        styleMask: [.borderless, .nonactivatingPanel],
                         backing: .buffered, defer: false)
         super.init()
 
         panel.title = source.displayName
-        panel.titlebarAppearsTransparent = true
-        panel.titleVisibility = .hidden
-        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        panel.standardWindowButton(.zoomButton)?.isHidden = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.becomesKeyOnlyIfNeeded = true
-        panel.backgroundColor = .black
-        panel.contentAspectRatio = source.bounds.size
-        panel.contentMinSize = NSSize(width: 120, height: 80)
-        panel.delegate = self
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.isMovable = false            // MirrorView moves it, so we can watch for shakes
+        panel.acceptsMouseMovedEvents = true
         panel.contentView = mirror
+        mirror.aspect = source.bounds.size
 
-        mirror.onDoubleClick = { [weak self] in self?.focusOriginal() }
+        mirror.onClick = { [weak self] in self?.handOffToRealWindow() }
         mirror.onDragBegan = { [weak self] in self?.shake.reset() }
         mirror.onDrag = { [weak self] p in self?.handleDrag(p) }
         receiver.onFrame = { [weak self] surface in self?.mirror.show(surface) }
@@ -159,7 +235,7 @@ final class PinnedWindow: NSObject, NSWindowDelegate {
         }
         startStream()
 
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.checkSource()
         }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -169,14 +245,7 @@ final class PinnedWindow: NSObject, NSWindowDelegate {
         }
     }
 
-    func unpin() { teardown(animated: true) }
-
-    /// The panel's close button was clicked; it's already closing itself.
-    func windowWillClose(_ notification: Notification) {
-        teardown(animated: false, closePanel: false)
-    }
-
-    private func teardown(animated: Bool, closePanel: Bool = true) {
+    func unpin() {
         guard !closing else { return }
         closing = true
         timer?.invalidate()
@@ -187,8 +256,7 @@ final class PinnedWindow: NSObject, NSWindowDelegate {
         stream = nil
         onClose?()
 
-        guard closePanel else { return }
-        if animated && panel.isVisible {
+        if panel.isVisible {
             NSAnimationContext.runAnimationGroup({ ctx in
                 ctx.duration = 0.15
                 self.panel.animator().alphaValue = 0
@@ -202,6 +270,7 @@ final class PinnedWindow: NSObject, NSWindowDelegate {
 
     /// Quick blink so you can tell this window is already pinned.
     func flash() {
+        if handedOff { reappear() }
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.12
             self.panel.animator().alphaValue = 0.3
@@ -269,47 +338,85 @@ final class PinnedWindow: NSObject, NSWindowDelegate {
         return c
     }
 
-    /// Follows the original window: unpin if it closed, re-size if it changed size.
+    /// Follows the original window: unpin if it closed, keep the stream's
+    /// resolution and the pin's aspect ratio in step if it changed size.
     private func checkSource() {
         guard !closing else { return }
         guard let b = WindowList.bounds(of: source.id) else { unpin(); return }
         guard abs(b.width - lastSize.width) > 1 || abs(b.height - lastSize.height) > 1,
               b.width > 0, b.height > 0 else { return }
         lastSize = b.size
-        panel.contentAspectRatio = b.size
-        let f = panel.frame
-        let newHeight = f.width * b.height / b.width
-        panel.setFrame(NSRect(x: f.minX, y: f.maxY - newHeight, width: f.width, height: newHeight), display: true)
+        mirror.aspect = b.size
         stream?.updateConfiguration(makeConfig(size: b.size)) { _ in }
+        if !handedOff {
+            // Keep the pin's width and top-left corner, fix the height to the new shape.
+            let f = panel.frame
+            let h = f.width * b.height / b.width
+            panel.setFrame(NSRect(x: f.minX, y: f.maxY - h, width: f.width, height: h), display: true)
+        }
     }
 
-    // MARK: Interaction
+    // MARK: Handing off between the pin and the real window
+
+    /// Click: move the real window to exactly where the pin is (same size),
+    /// bring it forward, and step aside.
+    private func handOffToRealWindow() {
+        guard !closing else { return }
+        guard Permissions.accessibility else {
+            PinManager.shared.onNeedsPermission?()
+            return
+        }
+        let f = panel.frame
+        let target = CGRect(x: f.minX, y: Geometry.primaryHeight - f.maxY, width: f.width, height: f.height)
+
+        if let current = WindowList.bounds(of: source.id),
+           let ax = AXHelper.window(pid: source.pid, matching: current) {
+            AXHelper.setFrame(ax, to: target)
+            AXHelper.raise(ax)
+        }
+        NSRunningApplication(processIdentifier: source.pid)?.activate()
+
+        handedOff = true
+        // Give the app a moment to redraw at its new spot so there's no flicker.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in
+            guard let self, self.handedOff, !self.closing else { return }
+            self.panel.orderOut(nil)
+        }
+    }
+
+    /// You switched to another app: float again, right where the real window is now.
+    private func reappear() {
+        guard !closing else { return }
+        handedOff = false
+        if let b = WindowList.bounds(of: source.id) {
+            panel.setFrame(Geometry.toCocoa(b), display: true)
+            mirror.aspect = b.size
+        }
+        panel.alphaValue = CGFloat(Prefs.opacity)
+        panel.orderFrontRegardless()
+    }
+
+    private func appActivated(_ note: Notification) {
+        guard !closing,
+              let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+        if app.processIdentifier == source.pid {
+            // You went to the real app some other way (Dock, ⌘Tab, clicking it).
+            if !handedOff {
+                handedOff = true
+                panel.orderOut(nil)
+            }
+        } else if handedOff {
+            reappear()
+        }
+    }
+
+    // MARK: Shake to unpin
 
     private func handleDrag(_ p: NSPoint) {
         guard Prefs.shakeEnabled else { return }
         if shake.feed(p) {
             if Prefs.playSound { NSSound(named: "Bottle")?.play() }
             unpin()
-        }
-    }
-
-    /// Double-click: jump to the real window.
-    private func focusOriginal() {
-        NSRunningApplication(processIdentifier: source.pid)?.activate()
-        if let b = WindowList.bounds(of: source.id), Permissions.accessibility {
-            AXHelper.raise(pid: source.pid, matching: b)
-        }
-    }
-
-    /// Get out of the way while you're using the original app; come back when you leave it.
-    private func appActivated(_ note: Notification) {
-        guard !closing, Prefs.hideWhenSourceFront,
-              let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-        if app.processIdentifier == source.pid {
-            panel.orderOut(nil)
-        } else {
-            panel.alphaValue = CGFloat(Prefs.opacity)
-            panel.orderFrontRegardless()
         }
     }
 }
@@ -328,7 +435,7 @@ final class PinManager {
             existing.flash()
             return
         }
-        let p = PinnedWindow(source: window, index: pins.count)
+        let p = PinnedWindow(source: window)
         p.onClose = { [weak self, weak p] in
             guard let self, let p else { return }
             self.pins.removeAll { $0 === p }

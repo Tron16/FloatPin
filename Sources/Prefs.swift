@@ -8,12 +8,10 @@ enum K {
     static let shakeDistance = "shakeDistance"
     static let opacity = "opacity"
     static let clickThrough = "clickThrough"
-    static let pinScale = "pinScale"
     static let frameRate = "frameRate"
     static let showBorder = "showBorder"
     static let hotkeyEnabled = "hotkeyEnabled"
     static let playSound = "playSound"
-    static let hideWhenSourceFront = "hideWhenSourceFront"
 }
 
 enum Prefs {
@@ -27,12 +25,10 @@ enum Prefs {
             K.shakeDistance: 30.0,     // each swing must be at least this many points
             K.opacity: 1.0,
             K.clickThrough: false,
-            K.pinScale: 0.5,
             K.frameRate: 30,
-            K.showBorder: true,
+            K.showBorder: false,
             K.hotkeyEnabled: true,
             K.playSound: true,
-            K.hideWhenSourceFront: true,
         ])
     }
 
@@ -42,10 +38,8 @@ enum Prefs {
     static var shakeDistance: Double { max(5, d.double(forKey: K.shakeDistance)) }
     static var opacity: Double { min(1, max(0.1, d.double(forKey: K.opacity))) }
     static var clickThrough: Bool { d.bool(forKey: K.clickThrough) }
-    static var pinScale: Double { min(1, max(0.1, d.double(forKey: K.pinScale))) }
     static var frameRate: Int { max(1, d.integer(forKey: K.frameRate)) }
     static var showBorder: Bool { d.bool(forKey: K.showBorder) }
     static var hotkeyEnabled: Bool { d.bool(forKey: K.hotkeyEnabled) }
     static var playSound: Bool { d.bool(forKey: K.playSound) }
-    static var hideWhenSourceFront: Bool { d.bool(forKey: K.hideWhenSourceFront) }
 }

@@ -42,7 +42,7 @@ struct OnboardingView: View {
 
             PermissionRow(
                 title: "Accessibility",
-                detail: "Lets FloatPin jump back to the original window when you double-click a pin.",
+                detail: "When you click a pin, moves the real window to exactly where the pin is and brings it forward.",
                 granted: model.accessibility,
                 action: Permissions.requestAccessibility)
 
@@ -105,12 +105,10 @@ struct SettingsView: View {
     @AppStorage(K.shakeReversals) private var reversals = 6
     @AppStorage(K.shakeWindow) private var shakeWindow = 2.0
     @AppStorage(K.shakeDistance) private var shakeDistance = 30.0
-    @AppStorage(K.pinScale) private var pinScale = 0.5
     @AppStorage(K.opacity) private var opacity = 1.0
     @AppStorage(K.clickThrough) private var clickThrough = false
-    @AppStorage(K.showBorder) private var showBorder = true
+    @AppStorage(K.showBorder) private var showBorder = false
     @AppStorage(K.frameRate) private var frameRate = 30
-    @AppStorage(K.hideWhenSourceFront) private var hideWhenSourceFront = true
     @AppStorage(K.hotkeyEnabled) private var hotkeyEnabled = true
     @AppStorage(K.playSound) private var playSound = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -131,14 +129,10 @@ struct SettingsView: View {
             }
 
             Section("Pinned windows") {
-                Slider(value: $pinScale, in: 0.2...1, step: 0.05) {
-                    Text("Starting size: \(Int(pinScale * 100))%")
-                }
                 Slider(value: $opacity, in: 0.2...1, step: 0.05) {
                     Text("Opacity: \(Int(opacity * 100))%")
                 }
-                Toggle("Click-through (clicks go to whatever is behind)", isOn: $clickThrough)
-                Toggle("Hide a pin while its app is in front", isOn: $hideWhenSourceFront)
+                Toggle("Click-through (clicks go to whatever is behind, so clicking a pin won't open it)", isOn: $clickThrough)
                 Toggle("Show colored border", isOn: $showBorder)
                 Picker("Frame rate", selection: $frameRate) {
                     Text("10 fps").tag(10)
