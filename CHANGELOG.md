@@ -14,3 +14,4 @@ The first public release.
 - ⌃⌥P to pin or unpin the front window.
 - Guided setup for Screen Recording and Accessibility.
 - Settings for shake sensitivity, click-through, border, frame rate, sounds, and launch at login.
+- A pin keeps floating over other windows of the same app too (like a second Chrome window).
