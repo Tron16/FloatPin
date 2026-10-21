@@ -1,0 +1,42 @@
+name: Bug report
+description: Something isn't working the way it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Safari
+        2. Shake the window
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: Which app's window were you pinning?
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 15.1 (Apple Silicon)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: FloatPin version
+      placeholder: "1.0"
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screen recordings and screenshots help a lot.
