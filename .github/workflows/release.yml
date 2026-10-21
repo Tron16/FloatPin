@@ -1,0 +1,53 @@
+name: Release
+
+# Publishes a release for the version in Info.plist the first time main builds it.
+# Bump CFBundleShortVersionString (and add a CHANGELOG entry) to ship a new one.
+on:
+  push:
+    branches: [main]
+    paths:
+      - Info.plist
+      - Sources/**
+      - build.sh
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: echo "value=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Info.plist)" >> "$GITHUB_OUTPUT"
+
+      - name: Check for an existing release
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.version.outputs.value }}" > /dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build disk image
+        if: steps.existing.outputs.found == 'false'
+        run: ./build.sh dmg
+
+      - name: Publish release
+        if: steps.existing.outputs.found == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          awk -v v="[$VERSION]" 'index($0, "## ") == 1 { p = (index($0, v) > 0); next } p' CHANGELOG.md > notes.md
+          gh release create "v$VERSION" FloatPin.dmg \
+            --title "FloatPin $VERSION" \
+            --notes-file notes.md \
+            --target "$GITHUB_SHA"
