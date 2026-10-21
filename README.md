@@ -4,9 +4,9 @@
 
 # FloatPin
 
-**Shake any window to keep it floating on top. Click it to jump back in.**
+**Keep any Mac window always on top. Just shake it to pin it.**
 
-A tiny, free, open-source menu bar app for macOS. No account, no telemetry, no subscription.
+A tiny, free, open-source menu bar app that pins windows on top on macOS. A free alternative to Floaty, Afloat, and Helium. No account, no telemetry, no subscription.
 
 [Download](https://github.com/Tron16/FloatPin/releases/latest/download/FloatPin.dmg) · [How it works](#how-it-works) · [Build it yourself](#build-it-yourself) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
 
@@ -24,7 +24,7 @@ A tiny, free, open-source menu bar app for macOS. No account, no telemetry, no s
 
 ## Why
 
-You're following a lecture, a tutorial, or a dashboard while you work in something else, and macOS keeps burying it. FloatPin fixes that with one gesture: grab the window, give it a shake, and it stays on top of everything until you shake it again.
+You're following a lecture, a tutorial, or a dashboard while you work in something else, and macOS keeps burying it. There's no built-in way to keep a window always on top on a Mac, so FloatPin adds one with a single gesture: grab the window, give it a shake, and it stays on top of everything until you shake it again.
 
 The pinned window doesn't turn into a picture-in-picture box or jump to a corner. It stays exactly where you left it, at the same size, so it still feels like the same window.
 
@@ -108,6 +108,32 @@ or sign with your own certificate so they stick: `SIGN_IDENTITY="Apple Developme
 - **A pinned window lands slightly off:** some apps limit their own minimum size or position. Resize the pin a little and it'll re-sync.
 
 Still stuck? [Open an issue](https://github.com/Tron16/FloatPin/issues/new/choose) with your macOS version and what you were pinning.
+
+## FAQ
+
+### How do I keep a window always on top on a Mac?
+
+macOS doesn't have a built-in "always on top" option. With FloatPin installed, drag the window by its title bar and give it a quick shake. It stays pinned above every other window until you shake it again. You can also press **⌃⌥P** to pin whatever window is in front.
+
+### Does it work with Chrome, Safari, Zoom, VS Code, and other apps?
+
+Yes. FloatPin works with any regular app window, including browser windows, video players, PDFs, notes, terminals, and editors. You can even pin one Chrome window and keep working in another.
+
+### Can I pin more than one window?
+
+Yes. Shake as many windows as you like. Each one floats on its own, and the menu bar lists them all.
+
+### Is it a free alternative to Floaty, Afloat, or Helium?
+
+Yes. FloatPin is free and open source (MIT), with no paid tier. The difference is that it keeps the real window at the same size and spot instead of shrinking it into a picture-in-picture box.
+
+### Does it slow my Mac down?
+
+No. It only streams the windows you pin, and only while they're pinned. You can lower the frame rate in Settings if you're on battery.
+
+### Why does it need Screen Recording permission?
+
+To draw a live view of the pinned window above everything else. Nothing is recorded, saved, or sent anywhere. See [Private by default](#private-by-default).
 
 ## Contributing
 
