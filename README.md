@@ -6,7 +6,7 @@
 
 **Keep any Mac window always on top. Just shake it to pin it.**
 
-A tiny, free, open-source menu bar app that pins windows on top on macOS. A free alternative to Floaty, Afloat, and Helium. No account, no telemetry, no subscription.
+A tiny, free, open-source menu bar app that pins windows on top on macOS. A free alternative to Floaty, Afloat, and Helium. No account, or subscription.
 
 [Download](https://github.com/Tron16/FloatPin/releases/latest/download/FloatPin.dmg) · [How it works](#how-it-works) · [Build it yourself](#build-it-yourself) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
 
