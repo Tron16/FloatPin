@@ -35,7 +35,7 @@ The pinned window doesn't turn into a picture-in-picture box or jump to a corner
 ## What it does
 
 - **Shake to pin.** Drag any window by its title bar and shake it. You hear a pop; let go and it's pinned right where you dropped it.
-- **Feels like one window.** While you're in that app, you're using the real window. Switch to anything else and it floats above everything.
+- **Feels like one window.** While you're in that window, you're using the real thing. Click anywhere else, even another window of the same app (like a second Chrome window), and it floats above everything.
 - **Move and resize it** while it's floating. The real window follows along underneath, so nothing gets left behind.
 - **Click to jump in.** Clicking a pinned window brings you straight into the real one, and your click goes through.
 - **Shake again to unpin**, or click the little orange pin badge that shows up on hover.

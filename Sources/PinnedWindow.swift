@@ -9,8 +9,10 @@ import CoreVideo
  - The real window is always glued directly underneath the pin: same spot,
    same size. Move or resize the pin and the real window follows live.
  - Only one of them is ever visible:
-     * Using some other app  -> the pin shows, floating above everything.
-     * Using the pinned app  -> the pin tucks away and you use the real window.
+     * Using anything else      -> the pin shows, floating above everything,
+                                   including other windows of the same app
+                                   (e.g. a second Chrome window).
+     * Using the pinned window  -> the pin tucks away and you use the real window.
  - Click the pin: the real window (already right underneath) comes forward,
    the pin tucks away, and your click is replayed so it lands in the window.
  - Shake it again (pin or real window) to unpin.
@@ -290,6 +292,7 @@ final class PinnedWindow: NSObject {
     private var lastGlue: TimeInterval = 0
     private var lastUserChange: TimeInterval = 0
     private var pendingClick: CGPoint?
+    private var focusObserver: AXObserver?
 
     var title: String { source.displayName }
     private var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
@@ -357,17 +360,17 @@ final class PinnedWindow: NSObject {
                                         object: nil, queue: .main) { [weak self] note in
             self?.appActivated(note)
         })
+        watchFocus()
     }
 
     /// First frame is on screen: a little lift so you can see it took, then
-    /// step aside if you're still using that app.
+    /// step aside if you're still using that window.
     private func didAppear() {
         lift()
         mirror.flashBadge()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
-            guard let self, !self.closing, !self.dragging,
-                  NSWorkspace.shared.frontmostApplication?.processIdentifier == self.source.pid else { return }
-            self.tuck()
+            guard let self, !self.closing, !self.dragging else { return }
+            self.refreshVisibility()
         }
     }
 
@@ -394,6 +397,7 @@ final class PinnedWindow: NSObject {
         timer = nil
         observers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         observers.removeAll()
+        stopWatchingFocus()
         stream?.stopCapture { _ in }
         stream = nil
         onClose?()
@@ -553,13 +557,60 @@ final class PinnedWindow: NSObject {
     }
 
     private func appActivated(_ note: Notification) {
-        guard !closing,
-              let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-        if app.processIdentifier == source.pid {
+        refreshVisibility()
+    }
+
+    /// The one rule: tuck away only while the pinned window itself is the one
+    /// you're using. Any other window, even another window of the same app,
+    /// gets the pin floating on top of it.
+    private func refreshVisibility() {
+        guard !closing else { return }
+        let frontPid = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        if frontPid == source.pid && isPinnedWindowFocused() {
             if pendingClick != nil { finishHandOff() } else { tuck() }
-        } else {
+        } else if pendingClick == nil {
             untuck()
         }
+    }
+
+    private func isPinnedWindowFocused() -> Bool {
+        guard let focused = AXHelper.focusedWindow(pid: source.pid) else {
+            // Can't tell (no Accessibility yet): fall back to "the app is in front".
+            return true
+        }
+        if let mine = ax() { return CFEqual(focused, mine) }
+        // No handle on our window: compare frames instead.
+        guard let b = WindowList.bounds(of: source.id), let f = AXHelper.frame(of: focused) else { return true }
+        return abs(f.minX - b.minX) < 4 && abs(f.minY - b.minY) < 4 && abs(f.width - b.width) < 4
+    }
+
+    // MARK: Watching which window of the pinned app has focus
+
+    /// Switching between two windows of the same app doesn't activate a new
+    /// app, so listen for the app's own focused-window changes too.
+    private func watchFocus() {
+        var observer: AXObserver?
+        let callback: AXObserverCallback = { _, _, _, refcon in
+            guard let refcon else { return }
+            let me = Unmanaged<PinnedWindow>.fromOpaque(refcon).takeUnretainedValue()
+            DispatchQueue.main.async { me.refreshVisibility() }
+        }
+        guard AXObserverCreate(source.pid, callback, &observer) == .success, let observer else { return }
+        let app = AXUIElementCreateApplication(source.pid)
+        let refcon = Unmanaged.passUnretained(self).toOpaque()
+        AXObserverAddNotification(observer, app, kAXFocusedWindowChangedNotification as CFString, refcon)
+        AXObserverAddNotification(observer, app, kAXMainWindowChangedNotification as CFString, refcon)
+        CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
+        focusObserver = observer
+    }
+
+    private func stopWatchingFocus() {
+        guard let observer = focusObserver else { return }
+        let app = AXUIElementCreateApplication(source.pid)
+        AXObserverRemoveNotification(observer, app, kAXFocusedWindowChangedNotification as CFString)
+        AXObserverRemoveNotification(observer, app, kAXMainWindowChangedNotification as CFString)
+        CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
+        focusObserver = nil
     }
 
     // MARK: Shake to unpin

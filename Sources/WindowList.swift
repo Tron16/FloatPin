@@ -124,7 +124,16 @@ enum AXHelper {
         AXUIElementPerformAction(w, kAXRaiseAction as CFString)
     }
 
-    private static func frame(of w: AXUIElement) -> CGRect? {
+    /// The window that currently has focus inside an app (not necessarily the frontmost app).
+    static func focusedWindow(pid: pid_t) -> AXUIElement? {
+        let app = AXUIElementCreateApplication(pid)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return (value as! AXUIElement)
+    }
+
+    static func frame(of w: AXUIElement) -> CGRect? {
         var posRef: CFTypeRef?
         var sizeRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(w, kAXPositionAttribute as CFString, &posRef) == .success,
