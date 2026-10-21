@@ -23,7 +23,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pins.onChange = { [weak self] in self?.updateIcon() }
         pins.onNeedsPermission = { [weak self] in self?.showOnboarding() }
 
-        shakeMonitor.onShake = { window in PinManager.shared.pin(window) }
+        // Feedback the moment a shake is recognized; the pin happens when you let go.
+        shakeMonitor.onArmed = {
+            if Prefs.playSound { NSSound(named: "Pop")?.play() }
+            NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+        }
+        shakeMonitor.onShake = { window in PinManager.shared.toggle(window, sound: false) }
         shakeMonitor.start()
 
         hotKey.action = { [weak self] in self?.pinFrontWindow() }
@@ -118,12 +123,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func unpinAll() { PinManager.shared.unpinAll() }
 
     @objc private func pinItem(_ sender: NSMenuItem) {
-        if let w = sender.representedObject as? WinInfo { PinManager.shared.pin(w) }
+        if let w = sender.representedObject as? WinInfo { PinManager.shared.toggle(w, sound: true) }
     }
 
     @objc private func pinFrontWindow() {
         guard let w = WindowList.frontmostWindow() else { NSSound.beep(); return }
-        PinManager.shared.pin(w)
+        PinManager.shared.toggle(w, sound: true)
     }
 
     @objc private func quit() { NSApp.terminate(nil) }

@@ -97,6 +97,28 @@ enum AXHelper {
         AXUIElementSetAttributeValue(w, kAXPositionAttribute as CFString, pos)
     }
 
+    static func setPosition(_ w: AXUIElement, to p: CGPoint) {
+        var origin = p
+        guard let pos = AXValueCreate(.cgPoint, &origin) else { return }
+        AXUIElementSetAttributeValue(w, kAXPositionAttribute as CFString, pos)
+    }
+
+    static func isMinimized(_ w: AXUIElement) -> Bool {
+        var v: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(w, kAXMinimizedAttribute as CFString, &v) == .success else { return false }
+        return (v as? Bool) ?? false
+    }
+
+    /// Replays a click at a screen point (CG coordinates) so it lands in whatever is there now.
+    static func postClick(at p: CGPoint) {
+        let src = CGEventSource(stateID: .hidSystemState)
+        for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+            let e = CGEvent(mouseEventSource: src, mouseType: type, mouseCursorPosition: p, mouseButton: .left)
+            e?.setIntegerValueField(.mouseEventClickState, value: 1)
+            e?.post(tap: .cghidEventTap)
+        }
+    }
+
     static func raise(_ w: AXUIElement) {
         AXUIElementSetAttributeValue(w, kAXMainAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(w, kAXRaiseAction as CFString)

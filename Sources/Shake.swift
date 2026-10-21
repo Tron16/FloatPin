@@ -49,21 +49,23 @@ final class ShakeTracker {
 }
 
 /// Watches mouse drags in other apps. When you grab a window and shake it,
-/// `onShake` fires with that window.
+/// `onArmed` fires right away (for feedback), and `onShake` fires when you
+/// let go, with the window at the spot you dropped it.
 final class ShakeMonitor {
+    var onArmed: (() -> Void)?
     var onShake: ((WinInfo) -> Void)?
 
     private var monitors: [Any] = []
     private let tracker = ShakeTracker()
     private var target: WinInfo?
-    private var fired = false
+    private var armed = false
 
     func start() {
         stop()
         let specs: [(NSEvent.EventTypeMask, (NSEvent) -> Void)] = [
             (.leftMouseDown, { [weak self] e in self?.mouseDown(e) }),
             (.leftMouseDragged, { [weak self] e in self?.mouseDragged(e) }),
-            (.leftMouseUp, { [weak self] _ in self?.target = nil }),
+            (.leftMouseUp, { [weak self] _ in self?.mouseUp() }),
         ]
         for (mask, handler) in specs {
             if let m = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: handler) {
@@ -83,17 +85,27 @@ final class ShakeMonitor {
 
     private func mouseDown(_ e: NSEvent) {
         tracker.reset()
-        fired = false
+        armed = false
         target = Prefs.shakeEnabled ? WindowList.window(at: location(e)) : nil
     }
 
     private func mouseDragged(_ e: NSEvent) {
-        guard !fired, let t = target else { return }
+        guard !armed, let t = target else { return }
         guard tracker.feed(location(e)) else { return }
         // Make sure the window itself moved (you're dragging it, not selecting text in it).
         guard let now = WindowList.bounds(of: t.id),
               abs(now.minX - t.bounds.minX) > 2 || abs(now.minY - t.bounds.minY) > 2 else { return }
-        fired = true
-        onShake?(WinInfo(id: t.id, pid: t.pid, bounds: now, owner: t.owner, title: t.title))
+        armed = true
+        onArmed?()
+    }
+
+    private func mouseUp() {
+        defer { target = nil; armed = false }
+        guard armed, let t = target else { return }
+        // Give the window server a beat to settle the window's final position.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let b = WindowList.bounds(of: t.id) else { return }
+            self?.onShake?(WinInfo(id: t.id, pid: t.pid, bounds: b, owner: t.owner, title: t.title))
+        }
     }
 }

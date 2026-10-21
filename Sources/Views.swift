@@ -105,7 +105,6 @@ struct SettingsView: View {
     @AppStorage(K.shakeReversals) private var reversals = 6
     @AppStorage(K.shakeWindow) private var shakeWindow = 2.0
     @AppStorage(K.shakeDistance) private var shakeDistance = 30.0
-    @AppStorage(K.opacity) private var opacity = 1.0
     @AppStorage(K.clickThrough) private var clickThrough = false
     @AppStorage(K.showBorder) private var showBorder = false
     @AppStorage(K.frameRate) private var frameRate = 30
@@ -124,14 +123,11 @@ struct SettingsView: View {
                 Slider(value: $shakeDistance, in: 10...120, step: 5) {
                     Text("Shake distance: \(Int(shakeDistance)) pt")
                 }
-                Text("Shake a pinned window the same way to unpin it.")
+                Text("Shake a pinned window again (or click its pin badge) to unpin it.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Pinned windows") {
-                Slider(value: $opacity, in: 0.2...1, step: 0.05) {
-                    Text("Opacity: \(Int(opacity * 100))%")
-                }
                 Toggle("Click-through (clicks go to whatever is behind, so clicking a pin won't open it)", isOn: $clickThrough)
                 Toggle("Show colored border", isOn: $showBorder)
                 Picker("Frame rate", selection: $frameRate) {

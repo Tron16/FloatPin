@@ -16,17 +16,17 @@ The first launch opens a setup window asking for **Accessibility** and **Screen 
 
 ## Using it
 
-- **Pin:** drag a window by its title bar and shake it back and forth. The pin appears exactly over the original.
-- **Move / resize the pin:** drag it anywhere, or drag its edges to resize (it keeps the window's shape).
-- **Click the pin:** the real window jumps to exactly where the pin is, at the same size, and comes forward so you can use it. The pin steps aside.
-- **Switch to another app:** the pin floats again, right where the real window is.
-- **Unpin:** shake the pin the same way, or use the menu bar.
-- **⌃⌥P:** pins the front window. **Menu bar → Pin a Window** lists every open window.
-- **Settings:** shake sensitivity, opacity, click-through, border, frame rate, launch at login.
+- **Pin:** grab a window by its title bar and shake it. You'll hear a pop; let go and it's pinned right where you dropped it. It lifts slightly and a little orange pin badge shows for a second so you know it took.
+- **It's still one window.** While you're using that app, you're using the real window. Switch to anything else and it stays floating on top.
+- **Move / resize it** while it's floating: drag it anywhere or drag its edges. The real window follows along underneath, so nothing gets left behind.
+- **Click it** and you're straight back in the real window, and that click goes through (press a button, place the cursor, whatever you clicked).
+- **Unpin:** shake it again, click the pin badge (shows on hover), or use the menu bar.
+- **⌃⌥P** pins or unpins the front window. **Menu bar → Pin a Window** lists every open window.
+- **Settings:** shake sensitivity, click-through, border, frame rate, launch at login.
 
 ## How it works
 
-macOS won't let one app float another app's window, so FloatPin streams the window with ScreenCaptureKit into its own floating `NSPanel`. A pin is a live view, so to type into it you click it: the real window is moved (via Accessibility) to the pin's exact spot and size and brought forward, so it feels like the same window.
+macOS won't let one app float another app's window, so FloatPin streams the window with ScreenCaptureKit into its own floating `NSPanel`. The real window is kept glued directly under the pin (via Accessibility), and only one of the two is ever visible: the pin while you're in other apps, the real window while you're in that app. That's what makes it feel like a single window.
 
 | File | What it does |
 |---|---|
